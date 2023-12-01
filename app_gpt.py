@@ -6,10 +6,21 @@ from flask import Flask, render_template, request, redirect, url_for
 app = Flask(__name__)
 
 WiFi_List = []
+WPA_List = []
 
-def check_internet_connection():
+def check_internet_connection_main_flow():
     try:
         # Check internet connectivity by pinging Google's DNS server
+        print("Check Internet Connection in main flow")
+        subprocess.check_output(['ping', '-c', '1', '8.8.8.8'])
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+def check_internet_connection_server_flow():
+    try:
+        # Check internet connectivity by pinging Google's DNS server
+        print("Check Internet Connection in server flow")
         subprocess.check_output(['ping', '-c', '1', '8.8.8.8'])
         return True
     except subprocess.CalledProcessError:
@@ -29,35 +40,65 @@ def get_ip_address():
         return None
 
 
-def turn_on_access_point():
+def turn_on_access_point_main_flow():
     # Enable the access point with a specific SSID and password -- OLD VERSION
     # subprocess.run(['sudo', 'systemctl', 'start', 'hostapd'])
     # subprocess.run(['sudo', 'systemctl', 'start', 'dnsmasq'])
-
+    print("Turn on access point in main flow")
     # Enable the access point with a specific SSID and password -- NEW VERSION
     subprocess.run(['sudo', 'service', 'dhcpcd', 'stop'])
     # subprocess.run(['sudo', 'systemctl', 'disable', 'dhcpcd'])
-    
+    time.sleep(1)
     # subprocess.run(['sudo', 'systemctl', 'enable', 'NetworkManager'])
     subprocess.run(['sudo', 'service', 'NetworkManager', 'start'])
-
+    time.sleep(1)
     #subprocess.run(['sudo', 'nmcli', 'device', 'wifi', 'hotspot', 'ifname', 'wlan0', 'con-name', 'UTK_Converter','ssid', 'RPI_Zero', 'password', 'RPI012345'])
-    subprocess.run(['sudo', 'nmcli', 'device', 'connect', 'ifname', 'wlan0'])
-
-def turn_off_access_point():
-    # Disable the access point
+    subprocess.run(['sudo', 'nmcli', 'device', 'connect', 'wlan0'])
+    time.sleep(1)
     
+def turn_on_access_point_server_flow():
+    # Enable the access point with a specific SSID and password -- OLD VERSION
+    # subprocess.run(['sudo', 'systemctl', 'start', 'hostapd'])
+    # subprocess.run(['sudo', 'systemctl', 'start', 'dnsmasq'])
+    print("Turn on access point in server flow")
+    # Enable the access point with a specific SSID and password -- NEW VERSION
+    subprocess.run(['sudo', 'service', 'dhcpcd', 'stop'])
+    # subprocess.run(['sudo', 'systemctl', 'disable', 'dhcpcd'])
+    time.sleep(1)
+    # subprocess.run(['sudo', 'systemctl', 'enable', 'NetworkManager'])
+    subprocess.run(['sudo', 'service', 'NetworkManager', 'start'])
+    time.sleep(1)
+    #subprocess.run(['sudo', 'nmcli', 'device', 'wifi', 'hotspot', 'ifname', 'wlan0', 'con-name', 'UTK_Converter','ssid', 'RPI_Zero', 'password', 'RPI012345'])
+    subprocess.run(['sudo', 'nmcli', 'device', 'connect', 'wlan0'])
+    time.sleep(1)
+
+def turn_off_access_point_main_flow():
+    # Disable the access point
+    print("Turn off access point in main flow")
     subprocess.run(['sudo', 'nmcli', 'device', 'disconnect', 'wlan0'])
     
     subprocess.run(['sudo', 'service', 'NetworkManager', 'stop'])
     # subprocess.run(['sudo', 'systemctl', 'disable', 'NetworkManager'])
-    
+    time.sleep(1)
     # subprocess.run(['sudo', 'systemctl', 'enable', 'dhcpcd'])
     subprocess.run(['sudo', 'service', 'dhcpcd', 'start'])
+    time.sleep(1)
+    
+def turn_off_access_point_server_flow():
+    # Disable the access point
+    print("Turn off access point in server flow")
+    subprocess.run(['sudo', 'nmcli', 'device', 'disconnect', 'wlan0'])
+    
+    subprocess.run(['sudo', 'service', 'NetworkManager', 'stop'])
+    # subprocess.run(['sudo', 'systemctl', 'disable', 'NetworkManager'])
+    time.sleep(1)
+    # subprocess.run(['sudo', 'systemctl', 'enable', 'dhcpcd'])
+    subprocess.run(['sudo', 'service', 'dhcpcd', 'start'])
+    time.sleep(1)
 
 @app.route('/')
 def index():
-    return render_template('index_gpt.html', WiFi_List=WiFi_List)
+    return render_template('index.html', WiFi_List=WiFi_List)
 
 @app.route('/scan')
 def scan():
@@ -73,61 +114,48 @@ def scan():
             wifi_name = line.split('"')[1]
             WiFi_List.append(wifi_name)
 
-    return redirect(url_for('index_gpt'))
+    return redirect(url_for('index'))
 
 @app.route('/connect', methods=['POST'])
 def connect():
     selected_wifi = request.form['wifi']
     password = request.form['password']
 
-    turn_off_access_point()    
+    turn_off_access_point_server_flow()    
     # Use subprocess to connect to the selected Wi-Fi network
-    connect_output = subprocess.check_output(['sudo', 'wpa_cli', '-i', 'wlan0', 'add_network']).decode('utf-8')
-    network_id = connect_output.strip()
+    
+    try:
+        network_id = WPA_List.index(selected_wifi)
+        subprocess.run(['sudo', 'wpa_cli', '-i', 'wlan0', 'set_network', network_id, 'psk', f'"{password}"'])
+        subprocess.run(['sudo', 'wpa_cli', '-i', 'wlan0', 'enable_network', network_id])
+        subprocess.run(['sudo', 'wpa_cli', '-i', 'wlan0', 'save_config'])
+    except ValueError:
+        connect_output = subprocess.check_output(['sudo', 'wpa_cli', '-i', 'wlan0', 'add_network']).decode('utf-8')
+        network_id = connect_output.strip()
 
-    subprocess.run(['sudo', 'wpa_cli', '-i', 'wlan0', 'set_network', network_id, 'ssid', f'"{selected_wifi}"'])
-    subprocess.run(['sudo', 'wpa_cli', '-i', 'wlan0', 'set_network', network_id, 'psk', f'"{password}"'])
-    subprocess.run(['sudo', 'wpa_cli', '-i', 'wlan0', 'enable_network', network_id])
-    subprocess.run(['sudo', 'wpa_cli', '-i', 'wlan0', 'save_config'])
-
-    time.sleep(5)  # Allow time for the connection to be established
-
-    if check_internet_connection():
-        return "Internet is connected"
-    else:
-        turn_on_access_point()
-        return redirect(url_for('index_gpt'))
-
-def main():
-    while True:
-        if check_internet_connection():
-            print('Internet is connected')
-            return
-
-        turn_on_access_point()
-        print('Access point turned on')
-
-        # Start Flask server in a separate thread
-        t_flask = threading.Thread(target=app.run(host='0.0.0.0', port=5000))
-        t_flask.start()
-
-        # Wait for internet connection
-        while not check_internet_connection():
-            time.sleep(1)
-
-        t_flask.join()
+        subprocess.run(['sudo', 'wpa_cli', '-i', 'wlan0', 'set_network', network_id, 'ssid', f'"{selected_wifi}"'])
+        subprocess.run(['sudo', 'wpa_cli', '-i', 'wlan0', 'set_network', network_id, 'psk', f'"{password}"'])
+        subprocess.run(['sudo', 'wpa_cli', '-i', 'wlan0', 'enable_network', network_id])
+        subprocess.run(['sudo', 'wpa_cli', '-i', 'wlan0', 'save_config'])
         
-        # Stop access point
-        turn_off_access_point()
-        print('Access point turned off')
-        print('Internet is connected')
+        WPA_List.append(selected_wifi)
+        
+        
+    time.sleep(15)  # Allow time for the connection to be established
+
+    if check_internet_connection_server_flow():
+        print("Internet is connected")
+        return
+    else:
+        turn_on_access_point_server_flow()
+        time.sleep(5)
+        return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    main()
-
-# if __name__ == '__main__':
-#     if check_internet_connection():
-#         print("Internet is connected")
-#     else:
-#         turn_on_access_point()
-#         app.run(debug=True, host='0.0.0.0', port=5000)
+    turn_off_access_point_main_flow()
+    time.sleep(5)
+    if check_internet_connection_main_flow():
+        print("Internet is connected")
+    else:
+        turn_on_access_point_main_flow()
+        app.run(debug=True, host='0.0.0.0', port=5000)
