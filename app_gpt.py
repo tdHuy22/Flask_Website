@@ -7,8 +7,6 @@ app = Flask(__name__)
 
 WiFi_List = []
 
-WPA_SUPPLICANT_LIST = []
-
 def check_internet_connection():
     try:
         # Check internet connectivity by pinging Google's DNS server
@@ -43,7 +41,8 @@ def turn_on_access_point():
     # subprocess.run(['sudo', 'systemctl', 'enable', 'NetworkManager'])
     subprocess.run(['sudo', 'service', 'NetworkManager', 'start'])
 
-    subprocess.run(['sudo', 'nmcli', 'device', 'wifi', 'hotspot', 'ifname', 'wlan0', 'con-name', 'UTK_Converter','ssid', 'RPI_Zero', 'password', 'RPI012345'])
+    #subprocess.run(['sudo', 'nmcli', 'device', 'wifi', 'hotspot', 'ifname', 'wlan0', 'con-name', 'UTK_Converter','ssid', 'RPI_Zero', 'password', 'RPI012345'])
+    subprocess.run(['sudo', 'nmcli', 'device', 'connect', 'ifname', 'wlan0'])
 
 def turn_off_access_point():
     # Disable the access point
